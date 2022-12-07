@@ -3,19 +3,25 @@ package br.com.alura.orgs.ui.activity
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
+import android.view.Menu
+import android.view.MenuItem
 import androidx.appcompat.app.AppCompatActivity
+import androidx.datastore.preferences.core.edit
 import androidx.lifecycle.lifecycleScope
+import br.com.alura.orgs.R
 import br.com.alura.orgs.database.AppDatabase
 import br.com.alura.orgs.databinding.ActivityListaProdutosActivityBinding
+import br.com.alura.orgs.extensions.vaiPara
 import br.com.alura.orgs.preferences.dataStore
 import br.com.alura.orgs.preferences.usuarioLOgadoPreferences
 import br.com.alura.orgs.ui.recyclerview.adapter.ListaProdutosAdapter
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
-import java.util.prefs.Preferences
 
 
-class ListaProdutosActivity : AppCompatActivity() {
+class ListaProdutosActivity : UsuarioBaseActivity() {
 
     private val adapter = ListaProdutosAdapter(context = this)
     private val binding by lazy {
@@ -26,10 +32,6 @@ class ListaProdutosActivity : AppCompatActivity() {
         db.produtoDao()
     }
 
-    private val usuarioDao by lazy {
-        AppDatabase.instancia(this).usuarioDao()
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
@@ -37,22 +39,39 @@ class ListaProdutosActivity : AppCompatActivity() {
         configuraFab()
         lifecycleScope.launch {
             launch {
-                produtoDao.buscaTodos().collect { produtos ->
-                    adapter.atualiza(produtos)
-                }
-            }
-
-            dataStore.data.collect{ preferences ->
-               preferences[usuarioLOgadoPreferences]?.let { usuarioID->
-                   usuarioDao.buscaPorId(usuarioId).collect{
-                       Log.i("lista produtos", "onCreate: $it")
-                   }
-               }
+                usuario
+                    .filterNotNull()
+                    .collect { usuario ->
+                        buscaProdutosUsuario(usuario.id)
+                    }
 
             }
 
         }
     }
+
+    override fun onCreateOptionsMenu(menu: Menu?): Boolean {
+        menuInflater.inflate(R.menu.menu_lista_produtos, menu)
+        return super.onCreateOptionsMenu(menu)
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        when (item.itemId) {
+            R.id.menu_lista_produtos_sair_app -> {
+                lifecycleScope.launch {
+                    deslogaUsuario()
+                }
+            }
+        }
+        return super.onOptionsItemSelected(item)
+    }
+
+    private suspend fun buscaProdutosUsuario(usuarioId:String) {
+        produtoDao.buscaTodosDoUsuario(usuarioId).collect { produtos ->
+            adapter.atualiza(produtos)
+        }
+    }
+
 
     private fun configuraFab() {
         val fab = binding.activityListaProdutosFab
